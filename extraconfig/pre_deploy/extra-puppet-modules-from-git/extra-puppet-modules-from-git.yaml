@@ -1,0 +1,86 @@
+heat_template_version: 2015-10-15
+
+description: >
+  Install extra puppet modules pre-configuraition
+  Your environment file need to look like:
+    parameter_defaults:
+      ExtraPuppetModulesFromGit:
+        - server: gitserver.example.com
+          protocol: git
+          ssh-user: username
+          ssh-key: |
+            -----BEGIN RSA PRIVATE KEY-----
+            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            -----END RSA PRIVATE KEY-----
+          repos:
+            - repo: /path/to/puppet-modules.git
+              modules:
+                - foo-bar
+                - foo-baz
+            - repo: /path/to/my-modules.git
+              modules: 
+                - corp-idm
+                - corp-sudo
+        - server: github.com
+          protocol: https
+          https-user: user
+          https-secret: <password or auth-token>
+          repos:
+            - repo: user/puppet-auditd.git
+            - repo: user/sssd.git
+
+parameters:
+
+  server:
+    type: string
+  ExtraPuppetModulesFromGit:
+    type: json
+    description: >
+      A nested list of git servers, repositories and modules.
+      Valid keys for on entry:
+        server, protocol, ssh-user, ssh-key, https-user, https-secret, repos
+      
+      repos: is a list of key='repo' with value='repository' and an optional
+             key='modules' with value='list of modules'
+
+      Example:
+               - server: github.com
+                 protocol: https
+                 https-user: user
+                 https-secret: <password or auth-token>
+                 repos:
+                   - repo: user/puppet-auditd.git
+                   - repo: user/sssd.git
+                   - repo: user/my-modules.git
+                     modules:
+                       - corp-idm
+                       - corp-sudo
+
+resources:
+
+  ExtraPuppetModulesFromGitConfig:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: 
+        get_file: /home/stack/templates/extraconfig/pre_deploy/extra-puppet-modules-from-git/scripts/extra-puppet-modules-from-git.py
+      inputs: 
+        - name: EXTRA_PUPPET_MODULES_GIT
+          type: Json
+
+  ExtraPuppetModulesFromGitDeployment:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      name: ExtraPuppetModulesFromGitDeployment
+      server: {get_param: server}
+      config: {get_resource: ExtraPuppetModulesFromGitConfig}
+      input_values:
+        EXTRA_PUPPET_MODULES_GIT: {get_param: ExtraPuppetModulesFromGit}
+      actions: ['CREATE', 'UPDATE']
+
+outputs:
+  deploy_stdout:
+    description: Deployment reference, used to trigger puppet apply on changes
+    value: {get_attr: [ExtraPuppetModulesFromGitDeployment, deploy_stdout]}
+
